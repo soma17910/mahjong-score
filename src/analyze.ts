@@ -43,6 +43,8 @@ export interface HandContext {
   honba: number;
   /** ゲーム人数（省略時は4人） */
   players?: Players;
+  /** 北抜きの枚数（3人麻雀の抜きドラ。1枚ごとに+1翻） */
+  kita?: number;
 }
 
 export interface YakuItem {
@@ -405,7 +407,7 @@ function evalStandard(decomp: StandardDecomp, ctx: HandContext): Candidate | nul
     } else {
       let han = yaku.reduce((s, y) => s + y.han, 0);
       if (han === 0) continue; // 役なしはこの解釈を採用しない
-      han += ctx.doraCount; // ドラは役があるときのみ加算
+      han += ctx.doraCount + (ctx.kita ?? 0); // ドラ・北抜きは役があるときのみ加算
       const fu = calcFu(interp, ctx, pinfu);
       const { base, limitName } = baseFromHanFu(han, fu);
       cand = { yaku, yakuman, han, fu, score: buildScore(base, limitName, ctx) };
@@ -446,7 +448,7 @@ function evalChiitoitsu(pairs: number[], ctx: HandContext): Candidate | null {
     else yaku.push({ name: '清一色', han: 6 });
   }
 
-  let han = yaku.reduce((s, y) => s + y.han, 0) + ctx.doraCount;
+  let han = yaku.reduce((s, y) => s + y.han, 0) + ctx.doraCount + (ctx.kita ?? 0);
   const fu = 25; // 七対子は25符固定
   const { base, limitName } = baseFromHanFu(han, fu);
   return { yaku, yakuman, han, fu, score: buildScore(base, limitName, ctx) };
@@ -525,9 +527,20 @@ export function analyzeHand(tiles: number[], ctx: HandContext): AnalyzeResult {
 
   const { cand, form } = best;
   const isYakuman = cand.yakuman.length > 0;
+
+  // 表示用の一覧：役満は役満名、それ以外は役＋ドラ・北抜きも見せる
+  let displayYaku: YakuItem[];
+  if (isYakuman) {
+    displayYaku = cand.yakuman.map((n) => ({ name: n, han: 0 }));
+  } else {
+    displayYaku = [...cand.yaku];
+    if (ctx.doraCount > 0) displayYaku.push({ name: 'ドラ', han: ctx.doraCount });
+    if ((ctx.kita ?? 0) > 0) displayYaku.push({ name: '北抜き', han: ctx.kita! });
+  }
+
   return {
     ok: true,
-    yaku: isYakuman ? cand.yakuman.map((n) => ({ name: n, han: 0 })) : cand.yaku,
+    yaku: displayYaku,
     han: cand.han,
     fu: cand.fu,
     score: cand.score,

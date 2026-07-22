@@ -117,6 +117,25 @@ describe('役なし・和了形でない', () => {
   });
 });
 
+describe('北抜き（3人麻雀の抜きドラ）', () => {
+  it('北抜き2枚でその分の翻が加算される', () => {
+    // タンヤオ(1翻)のみの手に北抜き2枚 → 合計3翻40符
+    const tiles = parseTiles('234m 456p 678s 444s 55m');
+    const r = analyzeHand(tiles, ctx({ winningTile: makeIndex('m', 2), players: 3, kita: 2 }));
+    expect(r.han).toBe(3); // タンヤオ1 + 北抜き2
+    expect(r.fu).toBe(40);
+    expect(r.score?.total).toBe(5200);
+    expect(yakuNames(r)).toContain('北抜き');
+  });
+
+  it('役が無ければ北抜きだけでは上がれない', () => {
+    // 形はあるが役なし（嵌張待ち）＋北抜きのみ → ok:false
+    const tiles = parseTiles('123m 456m 789p 234s 99s');
+    const r = analyzeHand(tiles, ctx({ winningTile: makeIndex('p', 8), players: 3, kita: 3 }));
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe('一気通貫', () => {
   it('一気通貫を検出する', () => {
     // 123m456m789m + 22p + 345s、両面ロン

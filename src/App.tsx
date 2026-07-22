@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { calcScore, type Seat, type WinType, type ScoreResult, type Players } from './score';
 import { analyzeHand, SUPPORTED_YAKU, tileLabel } from './analyze';
 import { TILE_LABELS } from './tiles';
@@ -335,11 +335,27 @@ function Phase2View({ players }: { players: Players }) {
   const [seatWind, setSeatWind] = useState(1); // 1=東(親)
   const [roundWind, setRoundWind] = useState(1); // 1=東場
   const [dora, setDora] = useState(0);
+  const [kita, setKita] = useState(0); // 北抜き（3人麻雀のみ）
 
   const sortedHand = useMemo(() => [...hand].sort((a, b) => a - b), [hand]);
 
+  // 3人麻雀では 2〜8萬（インデックス1〜7）を使わない
+  const isTileAllowed = (idx: number) => !(players === 3 && idx >= 1 && idx <= 7);
+
+  // 3人麻雀に切り替えたら、手牌に残った2〜8萬を取り除く
+  useEffect(() => {
+    if (players !== 3) return;
+    setHand((prev) => {
+      const filtered = prev.filter((t) => !(t >= 1 && t <= 7));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+    setWinningTile((w) => (w !== null && w >= 1 && w <= 7 ? null : w));
+    setKita(0);
+  }, [players]);
+
   const addTile = (idx: number) => {
     if (hand.length >= 14) return;
+    if (!isTileAllowed(idx)) return;
     const cnt = hand.filter((t) => t === idx).length;
     if (cnt >= 4) return;
     const next = [...hand, idx];
@@ -378,8 +394,9 @@ function Phase2View({ players }: { players: Players }) {
       doraCount: dora,
       honba: 0,
       players,
+      kita: players === 3 ? kita : 0,
     });
-  }, [hand, winningTile, isTsumo, isRiichi, seatWind, roundWind, dora, players]);
+  }, [hand, winningTile, isTsumo, isRiichi, seatWind, roundWind, dora, players, kita]);
 
   return (
     <div className="space-y-5">
@@ -413,7 +430,12 @@ function Phase2View({ players }: { players: Players }) {
           {[MAN, PIN, SOU].map((row, r) => (
             <div key={r} className="grid grid-cols-9 gap-1.5">
               {row.map((idx) => (
-                <TileButton key={idx} idx={idx} onClick={() => addTile(idx)} disabled={hand.length >= 14} />
+                <TileButton
+                  key={idx}
+                  idx={idx}
+                  onClick={() => addTile(idx)}
+                  disabled={hand.length >= 14 || !isTileAllowed(idx)}
+                />
               ))}
             </div>
           ))}
@@ -423,7 +445,10 @@ function Phase2View({ players }: { players: Players }) {
             ))}
           </div>
         </div>
-        <Hint>萬子(m)・筒子(p)・索子(s)＝数の牌／東南西北白發中＝字牌。</Hint>
+        <Hint>
+          萬子(m)・筒子(p)・索子(s)＝数の牌／東南西北白發中＝字牌。
+          {players === 3 && '（3人麻雀では2〜8萬は使わないので選べません）'}
+        </Hint>
       </section>
 
       {/* 和了牌 */}
@@ -515,6 +540,15 @@ function Phase2View({ players }: { players: Players }) {
             <span className="text-sm font-semibold text-slate-600">ドラ</span>
             <Stepper value={dora} onChange={(n) => setDora(Math.max(0, n))} />
           </div>
+          {players === 3 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-600">北抜き</span>
+                <Stepper value={kita} onChange={(n) => setKita(Math.max(0, n))} />
+              </div>
+              <Hint>3人麻雀で抜いた「北」の枚数。1枚ごとに+1翻（抜きドラ）。</Hint>
+            </div>
+          )}
         </div>
       </section>
 
@@ -642,7 +676,7 @@ export default function App() {
         {tab === 'phase1' ? <Phase1View players={players} /> : <Phase2View players={players} />}
 
         <footer className="mt-8 text-center text-xs text-slate-400">
-          ロジックは自前実装・Vitestでテスト済み（40件）
+          ロジックは自前実装・Vitestでテスト済み（42件）
         </footer>
       </div>
     </div>
