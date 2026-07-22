@@ -327,7 +327,7 @@ function TileButton({
   );
 }
 
-function Phase2View({ players }: { players: Players }) {
+function Phase2View({ players, northYakuhai }: { players: Players; northYakuhai: boolean }) {
   const [hand, setHand] = useState<number[]>([]);
   const [winningTile, setWinningTile] = useState<number | null>(null);
   const [isTsumo, setIsTsumo] = useState(false);
@@ -395,8 +395,9 @@ function Phase2View({ players }: { players: Players }) {
       honba: 0,
       players,
       kita: players === 3 ? kita : 0,
+      northIsYakuhai: players === 3 ? northYakuhai : false,
     });
-  }, [hand, winningTile, isTsumo, isRiichi, seatWind, roundWind, dora, players, kita]);
+  }, [hand, winningTile, isTsumo, isRiichi, seatWind, roundWind, dora, players, kita, northYakuhai]);
 
   return (
     <div className="space-y-5">
@@ -607,6 +608,7 @@ function Phase2View({ players }: { players: Players }) {
 export default function App() {
   const [tab, setTab] = useState<'phase1' | 'phase2'>('phase1');
   const [players, setPlayers] = useState<Players>(4);
+  const [northYakuhai, setNorthYakuhai] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -650,6 +652,40 @@ export default function App() {
               ))}
             </div>
           </div>
+
+          {/* 3人麻雀のハウスルール：北を役牌にするか */}
+          {players === 3 && (
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <div>
+                <h3 className="text-sm font-semibold">北を役牌にする</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  オンにすると、北の刻子で+1翻（北の雀頭は+2符）になります。お使いのルールに合わせて選べます。
+                </p>
+              </div>
+              <div className="grid shrink-0 grid-cols-2 gap-2">
+                {(
+                  [
+                    { v: false, label: 'しない' },
+                    { v: true, label: 'する' },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={String(o.v)}
+                    type="button"
+                    onClick={() => setNorthYakuhai(o.v)}
+                    className={
+                      'rounded-xl px-4 py-2 text-sm font-semibold transition ' +
+                      (northYakuhai === o.v
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50')
+                    }
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
@@ -673,10 +709,14 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 'phase1' ? <Phase1View players={players} /> : <Phase2View players={players} />}
+        {tab === 'phase1' ? (
+          <Phase1View players={players} />
+        ) : (
+          <Phase2View players={players} northYakuhai={northYakuhai} />
+        )}
 
         <footer className="mt-8 text-center text-xs text-slate-400">
-          ロジックは自前実装・Vitestでテスト済み（42件）
+          ロジックは自前実装・Vitestでテスト済み（44件）
         </footer>
       </div>
     </div>

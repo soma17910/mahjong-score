@@ -136,6 +136,31 @@ describe('北抜き（3人麻雀の抜きドラ）', () => {
   });
 });
 
+describe('北を役牌にするハウスルール', () => {
+  // 北北北 234p 567p 789s + 55s、2pロン
+  const tiles = () => parseTiles('444z 234p 567p 789s 55s');
+
+  it('northIsYakuhai=true なら 役牌 北 が付く（1翻40符）', () => {
+    const r = analyzeHand(
+      tiles(),
+      ctx({ winningTile: makeIndex('p', 2), players: 3, northIsYakuhai: true }),
+    );
+    expect(r.ok).toBe(true);
+    expect(yakuNames(r)).toContain('役牌 北');
+    expect(r.han).toBe(1);
+    expect(r.fu).toBe(40);
+    expect(r.score?.total).toBe(1300);
+  });
+
+  it('northIsYakuhai=false なら役がつかず上がれない', () => {
+    const r = analyzeHand(
+      tiles(),
+      ctx({ winningTile: makeIndex('p', 2), players: 3, northIsYakuhai: false }),
+    );
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe('一気通貫', () => {
   it('一気通貫を検出する', () => {
     // 123m456m789m + 22p + 345s、両面ロン

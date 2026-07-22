@@ -45,7 +45,12 @@ export interface HandContext {
   players?: Players;
   /** 北抜きの枚数（3人麻雀の抜きドラ。1枚ごとに+1翻） */
   kita?: number;
+  /** 北（字牌の北）を役牌として扱うか（ハウスルール。3人麻雀でよく使う） */
+  northIsYakuhai?: boolean;
 }
+
+/** 北（字牌）の牌インデックス（27=東,28=南,29=西,30=北） */
+const NORTH = 30;
 
 export interface YakuItem {
   name: string;
@@ -84,6 +89,7 @@ const dealerOf = (ctx: HandContext): Seat => (ctx.seatWind === 1 ? 'dealer' : 'n
 /** その牌が役牌（三元牌・場風・自風）か */
 function isYakuhaiTile(idx: number, ctx: HandContext): boolean {
   if (isDragon(idx)) return true;
+  if (idx === NORTH && ctx.northIsYakuhai) return true;
   if (isWind(idx)) {
     const w = windNumber(idx);
     return w === ctx.seatWind || w === ctx.roundWind;
@@ -200,8 +206,19 @@ function detectStandardYaku(
       yaku.push({ name, han: 1 });
     } else if (isWind(t)) {
       const w = windNumber(t);
-      if (w === ctx.roundWind) yaku.push({ name: '役牌 場風', han: 1 });
-      if (w === ctx.seatWind) yaku.push({ name: '役牌 自風', han: 1 });
+      let counted = false;
+      if (w === ctx.roundWind) {
+        yaku.push({ name: '役牌 場風', han: 1 });
+        counted = true;
+      }
+      if (w === ctx.seatWind) {
+        yaku.push({ name: '役牌 自風', han: 1 });
+        counted = true;
+      }
+      // ハウスルール：北を役牌にする（場風・自風で数えていないときのみ）
+      if (t === NORTH && ctx.northIsYakuhai && !counted) {
+        yaku.push({ name: '役牌 北', han: 1 });
+      }
     }
   }
 
@@ -315,8 +332,17 @@ function calcFu(interp: Interp, ctx: HandContext, pinfu: boolean): number {
   if (isDragon(decomp.pair)) fu += 2;
   if (isWind(decomp.pair)) {
     const w = windNumber(decomp.pair);
-    if (w === ctx.roundWind) fu += 2;
-    if (w === ctx.seatWind) fu += 2;
+    let counted = false;
+    if (w === ctx.roundWind) {
+      fu += 2;
+      counted = true;
+    }
+    if (w === ctx.seatWind) {
+      fu += 2;
+      counted = true;
+    }
+    // ハウスルール：北を役牌にする場合、北の雀頭も +2
+    if (decomp.pair === NORTH && ctx.northIsYakuhai && !counted) fu += 2;
   }
 
   // 待ちの符（両面・シャンポンは0、それ以外は+2）
