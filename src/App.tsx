@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { calcScore, type Seat, type WinType, type ScoreResult } from './score';
+import { calcScore, type Seat, type WinType, type ScoreResult, type Players } from './score';
 import { analyzeHand, SUPPORTED_YAKU, tileLabel } from './analyze';
 import { TILE_LABELS } from './tiles';
 
@@ -63,7 +63,7 @@ function PaymentBreakdown({ result, seat }: { result: ScoreResult; seat: Seat })
   if (seat === 'dealer') {
     return (
       <p className="text-lg">
-        子3人が それぞれ
+        子{b.nonDealerPayers}人が それぞれ
         <span className="mx-1 text-2xl font-bold text-white">{fmt(b.fromNonDealer)}</span>
         点ずつ 支払い
         <span className="ml-1 text-sm text-emerald-200">（{fmt(b.fromNonDealer)}オール）</span>
@@ -76,7 +76,7 @@ function PaymentBreakdown({ result, seat }: { result: ScoreResult; seat: Seat })
         親が<span className="mx-1 text-2xl font-bold text-white">{fmt(b.fromDealer ?? 0)}</span>点
       </p>
       <p>
-        子2人が それぞれ
+        子{b.nonDealerPayers}人が それぞれ
         <span className="mx-1 text-2xl font-bold text-white">{fmt(b.fromNonDealer)}</span>
         点ずつ 支払い
       </p>
@@ -103,7 +103,7 @@ const FU_OPTIONS: { value: number; note: string }[] = [
 
 const HAN_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
-function Phase1View() {
+function Phase1View({ players }: { players: Players }) {
   const [han, setHan] = useState(4);
   const [fu, setFu] = useState(30);
   const [seat, setSeat] = useState<Seat>('nondealer');
@@ -111,7 +111,7 @@ function Phase1View() {
   const [honba, setHonba] = useState(0);
 
   const fuIrrelevant = han >= 5;
-  const result = calcScore({ han, fu, seat, winType, honba });
+  const result = calcScore({ han, fu, seat, winType, honba, players });
   const currentFuNote = FU_OPTIONS.find((f) => f.value === fu)?.note ?? '';
 
   return (
@@ -327,7 +327,7 @@ function TileButton({
   );
 }
 
-function Phase2View() {
+function Phase2View({ players }: { players: Players }) {
   const [hand, setHand] = useState<number[]>([]);
   const [winningTile, setWinningTile] = useState<number | null>(null);
   const [isTsumo, setIsTsumo] = useState(false);
@@ -377,8 +377,9 @@ function Phase2View() {
       roundWind,
       doraCount: dora,
       honba: 0,
+      players,
     });
-  }, [hand, winningTile, isTsumo, isRiichi, seatWind, roundWind, dora]);
+  }, [hand, winningTile, isTsumo, isRiichi, seatWind, roundWind, dora, players]);
 
   return (
     <div className="space-y-5">
@@ -571,6 +572,7 @@ function Phase2View() {
 
 export default function App() {
   const [tab, setTab] = useState<'phase1' | 'phase2'>('phase1');
+  const [players, setPlayers] = useState<Players>(4);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -581,6 +583,40 @@ export default function App() {
             翻・符から計算するモードと、手牌から役を自動判定するモードがあります。
           </p>
         </header>
+
+        {/* ゲーム人数（4人麻雀 / 3人麻雀） */}
+        <section className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">ゲーム人数</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                3人麻雀はツモの支払いが1人分減ります（ツモ損）。ロンは同じです。
+              </p>
+            </div>
+            <div className="grid shrink-0 grid-cols-2 gap-2">
+              {(
+                [
+                  { v: 4 as Players, label: '4人' },
+                  { v: 3 as Players, label: '3人' },
+                ]
+              ).map((p) => (
+                <button
+                  key={p.v}
+                  type="button"
+                  onClick={() => setPlayers(p.v)}
+                  className={
+                    'rounded-xl px-5 py-2.5 text-base font-semibold transition ' +
+                    (players === p.v
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50')
+                  }
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
           {(
@@ -603,10 +639,10 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 'phase1' ? <Phase1View /> : <Phase2View />}
+        {tab === 'phase1' ? <Phase1View players={players} /> : <Phase2View players={players} />}
 
         <footer className="mt-8 text-center text-xs text-slate-400">
-          ロジックは自前実装・Vitestでテスト済み（35件）
+          ロジックは自前実装・Vitestでテスト済み（40件）
         </footer>
       </div>
     </div>

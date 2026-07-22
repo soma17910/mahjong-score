@@ -17,6 +17,9 @@ export type Seat = 'dealer' | 'nondealer';
 /** 上がり方：ロンかツモか */
 export type WinType = 'ron' | 'tsumo';
 
+/** ゲーム人数：4人麻雀 or 3人麻雀 */
+export type Players = 4 | 3;
+
 /** 計算の入力 */
 export interface ScoreInput {
   /** 翻数 */
@@ -29,6 +32,8 @@ export interface ScoreInput {
   winType: WinType;
   /** 本場の数（0以上） */
   honba: number;
+  /** ゲーム人数（省略時は4人）。3人ツモは支払い人数が減る（ツモ損） */
+  players?: Players;
 }
 
 /** ロンのときの支払い内訳 */
@@ -45,6 +50,8 @@ export interface TsumoBreakdown {
   fromDealer?: number;
   /** 子1人あたりが支払う点数 */
   fromNonDealer: number;
+  /** 子が何人支払うか（4人麻雀と3人麻雀で変わる） */
+  nonDealerPayers: number;
 }
 
 /** 計算結果 */
@@ -96,25 +103,33 @@ export function scoreFromBase(
   seat: Seat,
   winType: WinType,
   honba: number,
+  players: Players = 4,
 ): { total: number; breakdown: RonBreakdown | TsumoBreakdown } {
   if (winType === 'ron') {
     // ロン：放銃者1人が支払う。子は基本点×4、親は基本点×6。
+    // （ロンは4人でも3人でも同じ）
     const mult = seat === 'dealer' ? 6 : 4;
     const fromDiscarder = ceil100(base * mult) + honba * 300;
     return { total: fromDiscarder, breakdown: { kind: 'ron', fromDiscarder } };
   }
 
-  // ツモ：他3人が分担して支払う。本場は各家 +100/本場。
+  // ツモ：他家が分担して支払う。本場は各家 +100/本場。
+  // 3人麻雀は支払う人が1人減る（ツモ損）＝各自の額は同じで合計だけ少なくなる。
   if (seat === 'dealer') {
-    // 親ツモ：子3人がそれぞれ 基本点×2 を支払う。
+    // 親ツモ：子がそれぞれ 基本点×2 を支払う（4人=子3人／3人=子2人）。
     const fromNonDealer = ceil100(base * 2) + honba * 100;
-    return { total: fromNonDealer * 3, breakdown: { kind: 'tsumo', fromNonDealer } };
+    const nonDealerPayers = players - 1;
+    return {
+      total: fromNonDealer * nonDealerPayers,
+      breakdown: { kind: 'tsumo', fromNonDealer, nonDealerPayers },
+    };
   } else {
-    // 子ツモ：親は 基本点×2、子2人はそれぞれ 基本点×1 を支払う。
+    // 子ツモ：親は 基本点×2、子はそれぞれ 基本点×1（4人=子2人／3人=子1人）。
     const fromDealer = ceil100(base * 2) + honba * 100;
     const fromNonDealer = ceil100(base * 1) + honba * 100;
-    const total = fromDealer + fromNonDealer * 2;
-    return { total, breakdown: { kind: 'tsumo', fromDealer, fromNonDealer } };
+    const nonDealerPayers = players - 2;
+    const total = fromDealer + fromNonDealer * nonDealerPayers;
+    return { total, breakdown: { kind: 'tsumo', fromDealer, fromNonDealer, nonDealerPayers } };
   }
 }
 
@@ -122,9 +137,9 @@ export function scoreFromBase(
  * 点数を計算する。
  */
 export function calcScore(input: ScoreInput): ScoreResult {
-  const { han, fu, seat, winType, honba } = input;
+  const { han, fu, seat, winType, honba, players = 4 } = input;
   const { base, limitName } = baseAndLimit(han, fu);
-  const { total, breakdown } = scoreFromBase(base, seat, winType, honba);
+  const { total, breakdown } = scoreFromBase(base, seat, winType, honba, players);
   return {
     total,
     limitName,

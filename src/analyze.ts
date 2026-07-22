@@ -13,7 +13,7 @@ import {
   type Meld,
   type StandardDecomp,
 } from './agari';
-import { scoreFromBase, type Seat, type ScoreResult } from './score';
+import { scoreFromBase, type Seat, type ScoreResult, type Players } from './score';
 import {
   isDragon,
   isHonor,
@@ -41,6 +41,8 @@ export interface HandContext {
   doraCount: number;
   /** 本場 */
   honba: number;
+  /** ゲーム人数（省略時は4人） */
+  players?: Players;
 }
 
 export interface YakuItem {
@@ -355,7 +357,13 @@ interface Candidate {
 }
 
 function buildScore(base: number, limitName: string, ctx: HandContext): ScoreResult {
-  const { total, breakdown } = scoreFromBase(base, dealerOf(ctx), ctx.isTsumo ? 'tsumo' : 'ron', ctx.honba);
+  const { total, breakdown } = scoreFromBase(
+    base,
+    dealerOf(ctx),
+    ctx.isTsumo ? 'tsumo' : 'ron',
+    ctx.honba,
+    ctx.players ?? 4,
+  );
   return { total, limitName, isLimit: limitName !== '', basePoints: base, breakdown };
 }
 

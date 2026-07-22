@@ -93,37 +93,68 @@ describe('ツモの計算', () => {
   it('親40符3翻ツモ = 2600オール（合計7800点）', () => {
     const r = calcScore({ han: 3, fu: 40, seat: 'dealer', winType: 'tsumo', honba: 0 });
     expect(r.total).toBe(7800);
-    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 2600 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 2600, nonDealerPayers: 3 });
   });
 
   it('子30符4翻ツモ = 子2000 / 親3900（合計7900点）', () => {
     const r = calcScore({ han: 4, fu: 30, seat: 'nondealer', winType: 'tsumo', honba: 0 });
     // 基本点1920 → 親 ceil100(3840)=3900, 子 ceil100(1920)=2000
-    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 3900, fromNonDealer: 2000 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 3900, fromNonDealer: 2000, nonDealerPayers: 2 });
     expect(r.total).toBe(7900);
   });
 
   it('子満貫ツモ = 子2000 / 親4000（合計8000点）', () => {
     const r = calcScore({ han: 5, fu: 30, seat: 'nondealer', winType: 'tsumo', honba: 0 });
-    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 4000, fromNonDealer: 2000 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 4000, fromNonDealer: 2000, nonDealerPayers: 2 });
     expect(r.total).toBe(8000);
   });
 
   it('親満貫ツモ = 4000オール（合計12000点）', () => {
     const r = calcScore({ han: 5, fu: 30, seat: 'dealer', winType: 'tsumo', honba: 0 });
-    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 4000 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 4000, nonDealerPayers: 3 });
     expect(r.total).toBe(12000);
   });
 
   it('本場加算：親満貫ツモ 1本場 = 4100オール（合計12300点）', () => {
     const r = calcScore({ han: 5, fu: 30, seat: 'dealer', winType: 'tsumo', honba: 1 });
-    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 4100 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 4100, nonDealerPayers: 3 });
     expect(r.total).toBe(12300);
   });
 
   it('本場加算：子満貫ツモ 1本場 = 子2100 / 親4100（合計8300点）', () => {
     const r = calcScore({ han: 5, fu: 30, seat: 'nondealer', winType: 'tsumo', honba: 1 });
-    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 4100, fromNonDealer: 2100 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 4100, fromNonDealer: 2100, nonDealerPayers: 2 });
     expect(r.total).toBe(8300);
+  });
+});
+
+describe('3人麻雀のツモ（ツモ損ルール）', () => {
+  it('ロンは4人麻雀と同じ：子30符4翻ロン = 7700点', () => {
+    const r = calcScore({ han: 4, fu: 30, seat: 'nondealer', winType: 'ron', honba: 0, players: 3 });
+    expect(r.total).toBe(7700);
+  });
+
+  it('親満貫ツモ（3人）= 4000オール・子2人＝合計8000点', () => {
+    const r = calcScore({ han: 5, fu: 30, seat: 'dealer', winType: 'tsumo', honba: 0, players: 3 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromNonDealer: 4000, nonDealerPayers: 2 });
+    expect(r.total).toBe(8000);
+  });
+
+  it('子満貫ツモ（3人）= 親4000 / 子1人2000＝合計6000点', () => {
+    const r = calcScore({ han: 5, fu: 30, seat: 'nondealer', winType: 'tsumo', honba: 0, players: 3 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 4000, fromNonDealer: 2000, nonDealerPayers: 1 });
+    expect(r.total).toBe(6000);
+  });
+
+  it('子30符4翻ツモ（3人）= 親3900 / 子1人2000＝合計5900点', () => {
+    const r = calcScore({ han: 4, fu: 30, seat: 'nondealer', winType: 'tsumo', honba: 0, players: 3 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 3900, fromNonDealer: 2000, nonDealerPayers: 1 });
+    expect(r.total).toBe(5900);
+  });
+
+  it('本場加算：子満貫ツモ 1本場（3人）= 親4100 / 子2100＝合計6200点', () => {
+    const r = calcScore({ han: 5, fu: 30, seat: 'nondealer', winType: 'tsumo', honba: 1, players: 3 });
+    expect(r.breakdown).toEqual({ kind: 'tsumo', fromDealer: 4100, fromNonDealer: 2100, nonDealerPayers: 1 });
+    expect(r.total).toBe(6200);
   });
 });
