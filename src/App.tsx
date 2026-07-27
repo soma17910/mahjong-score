@@ -292,6 +292,36 @@ const PIN = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 const SOU = [18, 19, 20, 21, 22, 23, 24, 25, 26];
 const HONORS = [27, 28, 29, 30, 31, 32, 33];
 
+// 写真認識API（/api/recognize）が返すコード → 牌インデックス
+const CODE_TO_INDEX: Record<string, number> = {
+  east: 27, south: 28, west: 29, north: 30, haku: 31, hatsu: 32, chun: 33,
+};
+for (let n = 1; n <= 9; n++) {
+  CODE_TO_INDEX[`${n}m`] = n - 1;
+  CODE_TO_INDEX[`${n}p`] = 9 + n - 1;
+  CODE_TO_INDEX[`${n}s`] = 18 + n - 1;
+}
+
+// 写真をブラウザ側で縮小して base64 にする（送信量とコストを抑える）
+async function fileToResizedBase64(
+  file: File,
+  maxEdge = 1600,
+  quality = 0.85,
+): Promise<{ data: string; mediaType: string }> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvasを初期化できませんでした。');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+  return { data: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
+}
+
 function TileButton({
   idx,
   onClick,
@@ -337,6 +367,11 @@ function Phase2View({ players, northYakuhai }: { players: Players; northYakuhai:
   const [dora, setDora] = useState(0);
   const [kita, setKita] = useState(0); // 北抜き（3人麻雀のみ）
 
+  // 写真認識の状態（写真機能はサーバー関数がある公開先＝ルート'/'でのみ有効）
+  const photoEnabled = import.meta.env.BASE_URL === '/';
+  const [photoState, setPhotoState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [photoMessage, setPhotoMessage] = useState('');
+
   const sortedHand = useMemo(() => [...hand].sort((a, b) => a - b), [hand]);
 
   // 3人麻雀では 2〜8萬（インデックス1〜7）を使わない
@@ -380,6 +415,46 @@ function Phase2View({ players, northYakuhai }: { players: Players; northYakuhai:
     setWinningTile(null);
   };
 
+  // 写真を選んだら認識APIに送り、手牌にセットする
+  const onPhotoSelected = async (file: File | undefined) => {
+    if (!file) return;
+    setPhotoState('loading');
+    setPhotoMessage('写真をAIで読み取っています…');
+    try {
+      const { data, mediaType } = await fileToResizedBase64(file);
+      const res = await fetch('/api/recognize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ imageBase64: data, mediaType }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || `エラー（${res.status}）`);
+
+      const codes: string[] = Array.isArray(json.tiles) ? json.tiles : [];
+      let indices = codes
+        .map((c) => CODE_TO_INDEX[c])
+        .filter((i): i is number => i !== undefined);
+      // 3人麻雀では2〜8萬を除外
+      if (players === 3) indices = indices.filter((i) => !(i >= 1 && i <= 7));
+      indices = indices.slice(0, 14);
+
+      setHand(indices);
+      setWinningTile(indices.length ? indices[indices.length - 1] : null);
+      setPhotoState('done');
+      const conf =
+        json.confidence === 'high' ? '高' : json.confidence === 'medium' ? '中' : '低';
+      setPhotoMessage(
+        `認識しました：${indices.length}枚（自信度 ${conf}）。` +
+          `牌が違うところはタップで直し、和了牌を選んでください。` +
+          (json.notes ? ` 備考：${json.notes}` : ''),
+      );
+    } catch (e) {
+      setPhotoState('error');
+      const msg = e instanceof Error ? e.message : String(e);
+      setPhotoMessage(`読み取りに失敗しました：${msg}`);
+    }
+  };
+
   const distinctTiles = useMemo(() => Array.from(new Set(sortedHand)), [sortedHand]);
   const seat: Seat = seatWind === 1 ? 'dealer' : 'nondealer';
 
@@ -401,6 +476,52 @@ function Phase2View({ players, northYakuhai }: { players: Players; northYakuhai:
 
   return (
     <div className="space-y-5">
+      {/* 写真から入力（写真機能が有効な公開先のみ表示） */}
+      {photoEnabled && (
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">📷 写真から入力（AI）</h2>
+        <Hint>
+          手牌を撮った写真を選ぶと、AIが牌を読み取って下に入れます。認識は完璧ではないので、
+          必ず内容を確認・修正してから計算してください。
+        </Hint>
+        <label
+          className={
+            'mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold transition ' +
+            (photoState === 'loading'
+              ? 'cursor-wait bg-slate-100 text-slate-400'
+              : 'bg-sky-600 text-white shadow hover:bg-sky-700')
+          }
+        >
+          {photoState === 'loading' ? '読み取り中…' : '写真を撮る / 選ぶ'}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            disabled={photoState === 'loading'}
+            onChange={(e) => {
+              onPhotoSelected(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </label>
+        {photoMessage && (
+          <p
+            className={
+              'mt-2 rounded-lg p-2 text-xs ' +
+              (photoState === 'error'
+                ? 'bg-rose-50 text-rose-700'
+                : photoState === 'done'
+                  ? 'bg-emerald-50 text-emerald-800'
+                  : 'bg-slate-50 text-slate-600')
+            }
+          >
+            {photoMessage}
+          </p>
+        )}
+      </section>
+      )}
+
       {/* 手牌エリア */}
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
